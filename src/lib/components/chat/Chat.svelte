@@ -1867,10 +1867,10 @@
 			true;
 
 		let messages = [
-			params?.system || $settings.system
+			params?.system || $settings.system || model?.info?.params?.system
 				? {
 						role: 'system',
-						content: `${params?.system ?? $settings?.system ?? ''}`
+						content: `${params?.system ?? $settings?.system ?? model?.info?.params?.system ?? ''}`
 					}
 				: undefined,
 			..._messages.map((message) => ({
