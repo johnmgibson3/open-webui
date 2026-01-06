@@ -140,6 +140,182 @@ DEFAULT_SOLUTION_TAGS = [("<|begin_of_solution|>", "<|end_of_solution|>")]
 DEFAULT_CODE_INTERPRETER_TAGS = [("<code_interpreter>", "</code_interpreter>")]
 
 
+# ==============================================================================
+# REASONING CONTENT VALIDATION FUNCTIONS
+# Filter JSON/metadata from reasoning blocks to prevent display of raw data
+# Works for any model (Gemini, DeepSeek, etc.) that sends structured data
+# ==============================================================================
+
+def is_json_like(content: str) -> bool:
+    """
+    Check if content appears to be JSON or structured data.
+
+    Examples that return True:
+    - {"key": "value"}
+    - [{"id": 123}]
+    - Content with > 20% JSON syntax characters
+
+    Examples that return False:
+    - "Let me think through this step by step"
+    - "I need to analyze the requirements"
+
+    Args:
+        content: String to check
+
+    Returns:
+        True if content looks like JSON, False otherwise
+    """
+    if not content:
+        return False
+
+    content = content.strip()
+
+    # Check 1: JSON object/array boundaries
+    if (content.startswith('{') and content.endswith('}')) or \
+       (content.startswith('[') and content.endswith(']')):
+        try:
+            json.loads(content)
+            return True  # Valid JSON
+        except (json.JSONDecodeError, ValueError):
+            pass  # Looks like JSON but isn't valid, keep checking
+
+    # Check 2: High density of JSON structural characters
+    # If > 20% of characters are JSON syntax, likely structured data
+    json_chars = sum(1 for c in content if c in '{}[],:')
+    if len(content) > 0 and json_chars / len(content) > 0.2:
+        return True
+
+    return False
+
+
+def is_readable_reasoning(content: str) -> bool:
+    """
+    Check if content appears to be human-readable reasoning text.
+
+    Rejects:
+    - Very short content (< 10 chars)
+    - Content with high density of special characters
+    - Content that looks like key-value pairs (e.g., "id: 123, type: reasoning")
+    - Content without real words (< 60% alpha words)
+
+    Accepts:
+    - Natural language text
+    - Reasoning with proper sentence structure
+    - Thinking/analysis text
+
+    Args:
+        content: String to validate
+
+    Returns:
+        True if content appears to be legitimate reasoning, False otherwise
+    """
+    # Check 1: Must have content and minimum length
+    if not content or len(content) < 10:
+        return False
+
+    content = content.strip()
+
+    # Check 2: Filter out obvious JSON first
+    if is_json_like(content):
+        return False
+
+    # Check 3: Must have spaces (not just concatenated data like "statuscompleteidabc123")
+    if ' ' not in content:
+        return False
+
+    words = content.split()
+
+    # Check 4: High colon ratio suggests key-value pairs (metadata)
+    # Example: "id: 123, type: reasoning, status: complete" has colons everywhere
+    if content.count(':') > len(words) / 3:
+        return False
+
+    # Check 5: Must have reasonable word-like content
+    # At least 60% of words should be real words (3+ letters)
+    alpha_words = [w for w in words if re.search(r'[a-z]{3,}', w, re.IGNORECASE)]
+    if len(words) > 0 and len(alpha_words) / len(words) < 0.6:
+        return False
+
+    # Check 6: Special character density check
+    # Too many special chars = likely metadata/structured data
+    special_chars = sum(1 for c in content if c in '{}[],:";=<>')
+    if len(content) > 0 and special_chars / len(content) > 0.15:  # > 15% = metadata
+        return False
+
+    # Passed all checks - looks like legitimate reasoning
+    return True
+
+
+def sanitize_reasoning_content(content: str, model_id: str = "") -> str:
+    """
+    Filter out raw metadata and JSON from reasoning content.
+
+    This is the main entry point that:
+    1. Attempts to extract reasoning from JSON if present
+    2. Validates content is human-readable
+    3. Filters out pure metadata
+    4. Applies model-specific rules
+
+    Examples:
+    - Input: '{"text": "Let me think..."}' → Output: "Let me think..." (extracted)
+    - Input: '{"type": "reasoning"}' → Output: "" (filtered - no content)
+    - Input: "Let me think..." → Output: "Let me think..." (kept as-is)
+    - Input: "id: 123, status: done" → Output: "" (filtered)
+
+    Args:
+        content: Raw content from reasoning/thinking field in streaming delta
+        model_id: Model identifier for model-specific handling (e.g., "gemini-3-pro")
+
+    Returns:
+        Sanitized content if valid, empty string if should be filtered out
+    """
+    if not content:
+        return ""
+
+    content = content.strip()
+
+    if not content:
+        return ""
+
+    # Try to extract reasoning from JSON if it looks like JSON
+    if is_json_like(content):
+        try:
+            data = json.loads(content)
+            # Look for actual reasoning content in common fields
+            if isinstance(data, dict):
+                # Gemini often uses "text" field for actual reasoning
+                for key in ['text', 'reasoning', 'thought', 'analysis', 'thinking', 'content']:
+                    if key in data and isinstance(data[key], str):
+                        extracted_text = data[key].strip()
+                        if extracted_text and len(extracted_text) > 10:
+                            content = extracted_text
+                            break
+                else:
+                    # No useful content found in JSON - filter it
+                    return ""
+        except (json.JSONDecodeError, ValueError):
+            # Invalid JSON - continue to normal validation
+            pass
+
+    # Validation layer 1: Check if content is human-readable reasoning
+    if not is_readable_reasoning(content):
+        return ""  # Filter out - it's not readable text
+
+    # Validation layer 2: Model-specific checks for known problematic patterns
+    if "gemini" in model_id.lower():
+        # Filter out Gemini-specific metadata patterns (but not after extraction)
+        # Example: '"type": "reasoning"', '"role": "assistant"', '"stop_reason": "stop"'
+        if re.search(r'"(?:type|role|stop_reason)"\s*:', content):
+            return ""  # Gemini internal metadata - filter out
+
+    # Passed all validation layers - return the clean content
+    return content
+
+# ==============================================================================
+# END REASONING CONTENT VALIDATION FUNCTIONS
+# ==============================================================================
+
+
 def process_tool_result(
     request,
     tool_function_name,
@@ -2693,31 +2869,39 @@ async def process_chat_response(
                                         or delta.get("thinking")
                                     )
                                     if reasoning_content:
-                                        if (
-                                            not content_blocks
-                                            or content_blocks[-1]["type"] != "reasoning"
-                                        ):
-                                            reasoning_block = {
-                                                "type": "reasoning",
-                                                "start_tag": "<think>",
-                                                "end_tag": "</think>",
-                                                "attributes": {
-                                                    "type": "reasoning_content"
-                                                },
-                                                "content": "",
-                                                "started_at": time.time(),
+                                        # Sanitize content before using (filter JSON/metadata)
+                                        sanitized_content = sanitize_reasoning_content(
+                                            reasoning_content,
+                                            model_id=form_data.get("model", "")
+                                        )
+
+                                        # Only proceed if we have valid content after filtering
+                                        if sanitized_content:
+                                            if (
+                                                not content_blocks
+                                                or content_blocks[-1]["type"] != "reasoning"
+                                            ):
+                                                reasoning_block = {
+                                                    "type": "reasoning",
+                                                    "start_tag": "<think>",
+                                                    "end_tag": "</think>",
+                                                    "attributes": {
+                                                        "type": "reasoning_content"
+                                                    },
+                                                    "content": "",
+                                                    "started_at": time.time(),
+                                                }
+                                                content_blocks.append(reasoning_block)
+                                            else:
+                                                reasoning_block = content_blocks[-1]
+
+                                            reasoning_block["content"] += sanitized_content
+
+                                            data = {
+                                                "content": serialize_content_blocks(
+                                                    content_blocks
+                                                )
                                             }
-                                            content_blocks.append(reasoning_block)
-                                        else:
-                                            reasoning_block = content_blocks[-1]
-
-                                        reasoning_block["content"] += reasoning_content
-
-                                        data = {
-                                            "content": serialize_content_blocks(
-                                                content_blocks
-                                            )
-                                        }
 
                                     if value:
                                         if (
