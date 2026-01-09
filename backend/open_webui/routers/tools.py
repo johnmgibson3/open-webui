@@ -29,6 +29,7 @@ from open_webui.utils.tools import get_tool_servers
 
 from open_webui.config import CACHE_DIR, BYPASS_ADMIN_ACCESS_CONTROL
 from open_webui.constants import ERROR_MESSAGES
+from open_webui.env import ENABLE_INDIVIDUAL_USER_SHARING
 
 
 log = logging.getLogger(__name__)

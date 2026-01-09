@@ -363,6 +363,9 @@ from open_webui.config import (
     ENABLE_COMMUNITY_SHARING,
     ENABLE_MESSAGE_RATING,
     ENABLE_USER_WEBHOOKS,
+    ENABLE_INDIVIDUAL_USER_SHARING,
+    USER_SHARING_SCOPE,
+    USER_SHARING_MODE,
     ENABLE_EVALUATION_ARENA_MODELS,
     BYPASS_ADMIN_ACCESS_CONTROL,
     USER_PERMISSIONS,
@@ -779,6 +782,9 @@ app.state.config.ENABLE_NOTES = ENABLE_NOTES
 app.state.config.ENABLE_COMMUNITY_SHARING = ENABLE_COMMUNITY_SHARING
 app.state.config.ENABLE_MESSAGE_RATING = ENABLE_MESSAGE_RATING
 app.state.config.ENABLE_USER_WEBHOOKS = ENABLE_USER_WEBHOOKS
+app.state.config.ENABLE_INDIVIDUAL_USER_SHARING = ENABLE_INDIVIDUAL_USER_SHARING
+app.state.config.USER_SHARING_SCOPE = USER_SHARING_SCOPE
+app.state.config.USER_SHARING_MODE = USER_SHARING_MODE
 
 app.state.config.ENABLE_EVALUATION_ARENA_MODELS = ENABLE_EVALUATION_ARENA_MODELS
 app.state.config.EVALUATION_ARENA_MODELS = EVALUATION_ARENA_MODELS
@@ -1898,6 +1904,9 @@ async def get_app_config(request: Request):
             "enable_websocket": ENABLE_WEBSOCKET_SUPPORT,
             "enable_version_update_check": ENABLE_VERSION_UPDATE_CHECK,
             "enable_public_active_users_count": ENABLE_PUBLIC_ACTIVE_USERS_COUNT,
+            "enable_individual_user_sharing": app.state.config.ENABLE_INDIVIDUAL_USER_SHARING,
+            "user_sharing_scope": app.state.config.USER_SHARING_SCOPE,
+            "user_sharing_mode": app.state.config.USER_SHARING_MODE,
             **(
                 {
                     "enable_direct_connections": app.state.config.ENABLE_DIRECT_CONNECTIONS,

@@ -9,6 +9,7 @@
 	import Database from './Settings/Database.svelte';
 
 	import General from './Settings/General.svelte';
+	import Sharing from './Settings/Sharing.svelte';
 	import Pipelines from './Settings/Pipelines.svelte';
 	import Audio from './Settings/Audio.svelte';
 	import Images from './Settings/Images.svelte';
@@ -34,7 +35,8 @@
 		const tabFromPath = pathParts[pathParts.length - 1];
 		selectedTab = [
 			'general',
-			'connections',
+		'sharing',
+		'connections',
 			'models',
 			'evaluations',
 			'tools',
@@ -112,6 +114,31 @@
 			<div class=" self-center">{$i18n.t('General')}</div>
 		</button>
 
+
+	<button
+		id="sharing"
+		class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
+		'sharing'
+			? ''
+			: ' text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'}"
+		on:click={() => {
+			goto('/admin/settings/sharing');
+		}}
+	>
+		<div class=" self-center mr-2">
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				viewBox="0 0 16 16"
+				fill="currentColor"
+				class="w-4 h-4"
+			>
+				<path
+					d="M13.5 4.5a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM6.5 10a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM13.5 10a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM4.5 6.75a.75.75 0 0 1 .75.75v1a.75.75 0 0 1-1.5 0v-1a.75.75 0 0 1 .75-.75ZM9.25 7.5a.75.75 0 0 0-1.5 0v1a.75.75 0 0 0 1.5 0v-1Z"
+				/>
+			</svg>
+		</div>
+		<div class=" self-center">{$i18n.t('Sharing')}</div>
+	</button>
 		<button
 			id="connections"
 			class="px-0.5 py-1 min-w-fit rounded-lg flex-1 md:flex-none flex text-left transition {selectedTab ===
@@ -438,6 +465,15 @@
 	>
 		{#if selectedTab === 'general'}
 			<General
+				saveHandler={async () => {
+					toast.success($i18n.t('Settings saved successfully!'));
+
+					await tick();
+					await config.set(await getBackendConfig());
+				}}
+			/>
+		{:else if selectedTab === 'sharing'}
+			<Sharing
 				saveHandler={async () => {
 					toast.success($i18n.t('Settings saved successfully!'));
 

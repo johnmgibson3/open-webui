@@ -11,8 +11,19 @@ from open_webui.constants import ERROR_MESSAGES
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_access, has_permission
 from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL
+from open_webui.env import ENABLE_INDIVIDUAL_USER_SHARING
 
 router = APIRouter()
+
+
+def validate_access_control(access_control):
+    """Remove user_ids from access_control if individual user sharing is disabled"""
+    if not ENABLE_INDIVIDUAL_USER_SHARING and access_control:
+        if isinstance(access_control, dict):
+            for key in ['read', 'write']:
+                if key in access_control and isinstance(access_control[key], dict):
+                    access_control[key].pop('user_ids', None)
+    return access_control
 
 ############################
 # GetPrompts

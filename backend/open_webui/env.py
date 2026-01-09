@@ -444,6 +444,27 @@ WEBUI_AUTH_SIGNOUT_REDIRECT_URL = os.environ.get(
 )
 
 ####################################
+# USER SHARING Configuration
+####################################
+
+# Enable/disable individual user sharing feature globally
+ENABLE_INDIVIDUAL_USER_SHARING = (
+    os.environ.get("ENABLE_INDIVIDUAL_USER_SHARING", "True").lower() == "true"
+)
+
+# Sharing scope: "global" allows sharing with any user, "restricted" requires common group
+USER_SHARING_SCOPE = os.environ.get("USER_SHARING_SCOPE", "restricted")
+
+# User search mode: "email" only, "search" only, or "both"
+USER_SHARING_MODE = os.environ.get("USER_SHARING_MODE", "email")
+
+# Minimum characters for user search (prevents enumeration)
+USER_SEARCH_MIN_LENGTH = int(os.environ.get("USER_SEARCH_MIN_LENGTH", "3"))
+
+# Rate limit for user searches (searches per minute per user)
+USER_SEARCH_RATE_LIMIT = int(os.environ.get("USER_SEARCH_RATE_LIMIT", "10"))
+
+####################################
 # WEBUI_SECRET_KEY
 ####################################
 
